@@ -25,10 +25,16 @@ import getopt
 from mako.template import Template
 
 tpl = '''\
-/*
+/* 
+ * == pblaze-as ==
  * source : ${project}.s
  * create : ${ctime}
  * modify : ${mtime}
+ */
+/* 
+ * == pblaze-ld ==
+ * target : kcpsm3
+ * device : spartan-3
  */
 `timescale 1 ps / 1ps
 module ${project} (address, instruction, clk);
@@ -132,7 +138,7 @@ def parse_commandline():
         for (k, v) in opts:
             map_config[k] = v
 
-        if ('-h' in map_config) or ('--help' in map_config):
+        if ('-h' in map_config) or ('--help' in map_config) or len(args) == 0:
             print usage
             sys.exit(0)
 
@@ -253,6 +259,16 @@ if __name__ == '__main__':
     map_object = load_object(map_config)
     (lst_data, lst_parity) = convert_to_blockram(map_object)
     text = render(map_config, map_object, lst_data, lst_parity)
+
+    #insert pblaze-cc information
+    lst_text = []
+    lst_text.append('/*')
+    lst_text.append(' * == pblaze-cc ==')
+    if 'pblaze-cc' in map_object:
+        for (k, v) in map_object['pblaze-cc']:
+            lst_text.append(' * %s : %s' % (k, v))
+    lst_text.append(' */')
+    text = '\n'.join(lst_text) + '\n' + text
 
     if map_config['-o'] == '-':
         print text

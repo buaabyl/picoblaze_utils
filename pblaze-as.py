@@ -567,6 +567,8 @@ def convert_label_to_address(lst_blocks):
     return map_label_address
 
 def combine_blocks_to_list(lst_blocks):
+    nr_codes = 0
+
     #combine codes
     lst_assembly = []
     address = 0
@@ -577,10 +579,13 @@ def combine_blocks_to_list(lst_blocks):
                 #lst_assembly.append(['load', 's0', 's0'])
                 lst_assembly.append(['load', 's0', 0])
 
+        nr_codes += len(inst_block.codes)
+
         #insert codes
         lst_assembly.extend(inst_block.codes)
         address = inst_block.address + len(inst_block)
-    return lst_assembly
+
+    return nr_codes, lst_assembly
 
 def assembly_group0(lst_instructions):
     sX = lst_instructions[1]
@@ -677,7 +682,7 @@ def generate_kcpsm3_hex(lines):
     lst_blocks = convert_list_to_blocks(lines)
     arrange_address_to_rom(lst_blocks)
     map_label_address = convert_label_to_address(lst_blocks)
-    lst_assembly = combine_blocks_to_list(lst_blocks)
+    nr_codes, lst_assembly = combine_blocks_to_list(lst_blocks)
 
     text = []
     for lst_instructions in lst_assembly:
@@ -701,6 +706,8 @@ def generate_kcpsm3_hex(lines):
         except:
             print 'Error:', lst_instructions
             raise
+
+    print 'codes %d of 1024 rom (%d%%)'  % (nr_codes, (nr_codes * 100 / 1024))
 
     return (map_label_address, text)
 
@@ -819,6 +826,11 @@ if __name__ == '__main__':
     #parse source
     symbols = {}
     buf = file_get_contents(map_config['-i'])
+
+    #get pblaze-cc information
+    lst_info = re.findall(r';#!pblaze-cc (\w+) : ([^\n]+)', buf)
+
+    #preprocess
     lines = preprocess(buf.split('\n'), symbols)
 
     #generate psm
@@ -883,6 +895,7 @@ if __name__ == '__main__':
             map_object['mtime']  = map_config['--st_mtime']
             map_object['labels'] = map_label_address
             map_object['object'] = lst_hexvalues
+            map_object['pblaze-cc'] = lst_info
 
             text_json = json.dumps(map_object, indent=4)
             file_put_contents(map_config['-o'], text_json)

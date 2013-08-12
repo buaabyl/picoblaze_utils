@@ -456,7 +456,7 @@ def convert_list_to_block(info):
         if t == 'funcdecl':
             name = code[0]
             attributes = code[3]
-            res = re.match('__attribute__ \(\((.+)\W*\((.+)\)\)\)', attributes)
+            res = re.match('__attribute__[ \t]*\(\((.+)\W*\((.+)\)\)\)', attributes)
             if res:
                 clear_attrs = []
                 attrs = res.groups()
@@ -899,7 +899,7 @@ def generate_assembly(map_function, map_attribute, f=sys.stdout):
                 f.write('\n')
             elif attr[0] == 'interrupt':
                 addr = re.search(r'IRQ(\d+)', attr[1].upper()).groups()[0]
-                addr = 0x3F0 + int(addr)
+                addr = 0x3D0 + int(addr)
                 isr_table[addr] = name
                 isr_routine[name] = addr
             else:
@@ -1339,8 +1339,16 @@ if __name__ == '__main__':
             dump_blocks(map_function, f)
             f.close()
 
-        #dump result
+        #dump meta information
         f = open(map_options['-o'], 'w')
+        f.write(';#!pblaze-cc source : %s\n' % lst_args[0])
+
+        #get source file time
+        t = os.stat(lst_args[0])
+        f.write(';#!pblaze-cc create : %s\n' % time.ctime(t.st_ctime))
+        f.write(';#!pblaze-cc modify : %s\n' % time.ctime(t.st_mtime))
+
+        #dump assembly result
         generate_assembly(map_function, map_attribute, f)
         print 'wrote %d bytes to "%s"' % (f.tell(), map_options['-o'])
         f.close()
