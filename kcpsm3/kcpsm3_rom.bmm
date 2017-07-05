@@ -1,0 +1,10 @@
+// when using as bitgen bmm, must be [17:0]
+//   `-bd ../fw/main.mem tag pblaze`
+//
+// when using as data2mem, must be [0:17]
+ADDRESS_SPACE pblaze RAMB18 INDEX_ADDRESSING [0x00000000:0x000003FF]
+    BUS_BLOCK
+        pblaze_inst/program_rom/ram_1024_x_18 [17:0];
+    END_BUS_BLOCK;
+END_ADDRESS_SPACE;
+

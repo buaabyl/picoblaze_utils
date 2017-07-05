@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python2
 # -*- coding:utf-8 -*-
 #  
 #  Copyright 2013 buaa.byl@gmail.com
@@ -18,6 +18,9 @@
 #  along with this program; see the file COPYING.  If not, write to
 #  the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
 #
+#
+# 2013.08.12    first release
+#
 import os
 import sys
 import json
@@ -25,6 +28,8 @@ import getopt
 from mako.template import Template
 
 tpl = '''\
+`timescale 1 ps / 1ps
+
 /* 
  * == pblaze-as ==
  * source : ${project}.s
@@ -34,9 +39,8 @@ tpl = '''\
 /* 
  * == pblaze-ld ==
  * target : kcpsm3
- * device : spartan-3
  */
-`timescale 1 ps / 1ps
+
 module ${project} (address, instruction, clk);
 input [9:0] address;
 input clk;
@@ -146,7 +150,11 @@ def parse_commandline():
             name_without_path = os.path.split(args[0])[1]
             name_without_ext = os.path.splitext(name_without_path)[0]
             map_config['-o'] = name_without_ext + '.v'
-            map_config['--project'] = name_without_ext
+        else:
+            name_without_path = os.path.split(map_config['-o'])[1]
+            name_without_ext = os.path.splitext(name_without_path)[0]
+
+        map_config['--project'] = name_without_ext
 
         if len(args) != 1:
             raise PBLDException('Just support one object file!')
@@ -276,4 +284,6 @@ if __name__ == '__main__':
         file_put_contents(map_config['-o'], text)
         print 'wrote %d bytes to "%s"' % \
             (len(text), map_config['-o'])
+
+    print
 

@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python2
 # -*- coding:utf-8 -*-
 #  
 #  Copyright 2013 buaa.byl@gmail.com
@@ -18,7 +18,10 @@
 #  along with this program; see the file COPYING.  If not, write to
 #  the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-
+#
+# 2013.08.12    first release
+# 2017.01.11    add exe path to include search directory.
+#
 #
 # this is fake c compiler.
 # I write this script for easy write assembly code.
@@ -35,6 +38,8 @@ import types
 import subprocess
 import getopt
 from StringIO import StringIO
+
+BASEADDR_INTC_CLEAR = 0xF0
 
 #gnu style use 2 spaces as tab
 NR_SPACES_OF_TAB = 2
@@ -220,6 +225,12 @@ def parse_condition(info, line):
         end_while = True 
 
     line = re.sub(r'[; ]+$', '', line)
+
+    #strip more space
+    line = re.sub(r'[ \t]+',' ', line)
+    line = re.sub(r'\([ ]+', '(', line)
+    line = re.sub(r'[ ]+\)', ')', line)
+    #print repr(line)
 
     if line == 'else':
         info.lines.append([info.level, info.lineno, 'else', []])
@@ -746,8 +757,6 @@ def find_blockidx_of_label(lst_block, label):
     return None
 
 def convert_condition_to_ifgoto2(map_function):
-    print
-
     label_prefix = 'JOIN_'
     label_id = 0
 
@@ -855,6 +864,7 @@ def convert_condition_to_ifgoto2(map_function):
                 first_line[IDX_CODE].append(label_f_target)
 
     ##debug
+    #print
     #for name in map_function:
     #    lst_block = map_function[name]
 
@@ -867,6 +877,7 @@ def convert_condition_to_ifgoto2(map_function):
     #        print
 
 def generate_assembly(map_function, map_attribute, f=sys.stdout):
+    isr_num = {}
     isr_table = {}
     isr_routine = {}
 
@@ -898,8 +909,10 @@ def generate_assembly(map_function, map_attribute, f=sys.stdout):
                 f.write('address %s' % attr[1])
                 f.write('\n')
             elif attr[0] == 'interrupt':
-                addr = re.search(r'IRQ(\d+)', attr[1].upper()).groups()[0]
-                addr = 0x3D0 + int(addr)
+                num  = re.search(r'IRQ(\d+)', attr[1].upper()).groups()[0]
+                num  = int(num)
+                addr = 0x3D0 + num
+                isr_num[name] = num
                 isr_table[addr] = name
                 isr_routine[name] = addr
             else:
@@ -1091,9 +1104,13 @@ def generate_assembly(map_function, map_attribute, f=sys.stdout):
                     f.write('\n')
 
                     f.write('  ' * level)
-                    f.write('  compare %s, %s' % (str(param0), str(param1)))
+                    if compare in ['==', '!=', '<', '>=']:
+                        f.write('  compare %s, %s' % (str(param0), str(param1)))
+                    elif compare in ['&']:
+                        f.write('  test %s, %s' % (str(param0), str(param1)))
                     f.write('\n')
 
+                    #compare
                     if compare == '==':
                         flage_t = 'Z'
                         flage_f = 'NZ'
@@ -1106,6 +1123,10 @@ def generate_assembly(map_function, map_attribute, f=sys.stdout):
                     elif compare == '>=':
                         flage_t = 'NC'
                         flage_f = 'C'
+                    #test
+                    elif compare == '&':
+                        flage_t = 'NZ'
+                        flage_f = 'Z'
                     else:
                         msg = 'Not support "%s"' % str(line)
                         raise ParseException(msg)
@@ -1224,9 +1245,19 @@ def generate_assembly(map_function, map_attribute, f=sys.stdout):
             f.write('\n')
             pass
 
+        #end of function
         f.write('%s:' % label_end)
         f.write('\n')
+
         if name in isr_routine:
+            num = isr_num[name]
+            isr_clr_addr = num / 8
+            isr_clr_data = 1 << (num % 8)
+
+            f.write('  ;auto clear IRQ%d, offset = 0x%x, value = 0x%02X\n' % \
+                    (num, isr_clr_addr, isr_clr_data))
+            f.write('  move sF, %d\n' % isr_clr_data)
+            f.write('  output sF, %d\n' % (BASEADDR_INTC_CLEAR + isr_clr_addr))
             f.write('  returni enable')
         else:
             f.write('  return')
@@ -1240,13 +1271,15 @@ def generate_assembly(map_function, map_attribute, f=sys.stdout):
     f.write(';ISR')
     f.write('\n')
     for addr in sorted(isr_table):
+        f.write(';IRQ%d' % isr_num[isr_table[addr]])
+        f.write('\n')
         f.write('address 0x%03X' % addr)
         f.write('\n')
         f.write('jump    %s' % isr_table[addr])
         f.write('\n')
     pass
 
-usage = '''
+usage = '''\
 usage : %s [option] file
 
  -h         help
@@ -1262,7 +1295,12 @@ def parse_commandline():
 
     map_options = {}
     for (k, v) in opts:
-        map_options[k] = v
+        if k == '-I':
+            if k not in map_options:
+                map_options[k] = []
+            map_options[k].append(v)
+        else:
+            map_options[k] = v
 
     if '-h' in map_options:
         print usage
@@ -1274,22 +1312,33 @@ if __name__ == '__main__':
     try:
         map_options, lst_args = parse_commandline()
         if len(lst_args) == 0:
-            print 'Error : need source file!'
-            print
             print usage
             sys.exit(-1)
 
         if '-o' not in map_options:
-            fn_out = os.path.splitext(lst_args[0])[0] + '.s'
+            fn_name = os.path.split(lst_args[0])[1]
+            fn_out = os.path.splitext(fn_name)[0] + '.s'
             map_options['-o'] = fn_out
         else:
             fn_out = os.path.splitext(map_options['-o'])[0] + '.s'
-        map_options['path_noext'] = fn_out
+
+        map_options['path_noext'] = fn_out[:-2]
 
         #preprocess
         args = ['mcpp.exe']
+
+        #add current
+        pblaze_cc_path = os.path.realpath(sys.argv[0])
+        if not os.path.isfile(pblaze_cc_path):
+            pblaze_cc_path = sys.executable
+        if os.path.isfile(pblaze_cc_path):
+            args.append('-I')
+            args.append(os.path.dirname(pblaze_cc_path))
+
         if '-I' in map_options:
-            args.extend(['-I', map_options['-I']])
+            for path in map_options['-I']:
+                args.append('-I')
+                args.append(path)
             
         args.extend(['-e', 'utf-8', '-z', lst_args[0]])
 
@@ -1349,6 +1398,7 @@ if __name__ == '__main__':
         f.write(';#!pblaze-cc modify : %s\n' % time.ctime(t.st_mtime))
 
         #dump assembly result
+        print 'using BASEADDR_INTC_CLEAR = 0x%02x' % BASEADDR_INTC_CLEAR
         generate_assembly(map_function, map_attribute, f)
         print 'wrote %d bytes to "%s"' % (f.tell(), map_options['-o'])
         f.close()
@@ -1357,5 +1407,7 @@ if __name__ == '__main__':
     except ParseException as e:
         traceback.print_exc()
         print e.msg
+
+    print
 
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 from distutils.core import setup
 import py2exe
 import os
@@ -32,7 +33,10 @@ if fn_mcpp == None or fn_astyle == None:
 #               3:Don't bundle, just library
 opt = {'py2exe':
         {'bundle_files': 1,
-        "includes" : ["mako.template", "mako.cache", "pygments.styles.default"]
+        "includes" : [
+            "mako.template", "mako.cache", "pygments.styles.default",
+            "bisect"
+        ]
         }}
 
 class Target:
@@ -40,8 +44,8 @@ class Target:
         self.__dict__.update(kw)
         # for the versioninfo resources
         self.description    = "picoblaze utils"
-        self.version        = "0.0.3"
-        self.company_name   = "No Company"
+        self.version        = "2017.1.11.0"
+        self.company_name   = "GNU"
         self.copyright      = "GPLv3"
         self.name           = "pblaze"
 
@@ -54,9 +58,15 @@ setup(
             Target(script = 'pblaze-as.py'),
             Target(script = 'pblaze-ld.py')],
         data_files = [
-            ('.', ['kcpsm3.h', fn_mcpp, fn_astyle])],
-        #data_files=[(".", ["test.xml", "test.ini"])],
-        zipfile ='pblaze.pkg',
+            ('.', [
+                'kcpsm3.h',
+                'kcpsm6.h',
+                'pblaze_readme.md',
+                fn_mcpp,
+                fn_astyle
+            ])
+        ],
+        zipfile ='pblaze-runtime.pkg',
         #zipfile=None,
         options =opt
 )
