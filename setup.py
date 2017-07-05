@@ -61,7 +61,7 @@ setup(
             ('.', [
                 'kcpsm3.h',
                 'kcpsm6.h',
-                'pblaze_readme.md',
+                'README.md',
                 fn_mcpp,
                 fn_astyle
             ])
